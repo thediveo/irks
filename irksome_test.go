@@ -113,7 +113,7 @@ var _ = Describe("irksome", func() {
 		It("stops the yield when told", func() {
 			r := strings.NewReader(procInterruptsText)
 			items := 0
-			for _ = range allCounters(r, nil) {
+			for range allCounters(r, nil) {
 				items++
 				break
 			}

@@ -60,7 +60,7 @@ on /sys/kernel/irq]:
 The downside of “/sys/kernel/irq/#/” is that gathering all information requires
 a lot of repeated open, read, and close VFS operations. In contrast, getting the
 IRQ counters per CPU requires considerably fewer VFS operations when using
-“/proc/interrupts”: one open, one close, and inbetween just reading, reading,
+“/proc/interrupts”: one open, one close, and in-between just reading, reading,
 reading. From a performance perspective, “/sys/kernel/irq/#/” should be used in
 order to get certain structural IRQ information, such as the actions.
 
