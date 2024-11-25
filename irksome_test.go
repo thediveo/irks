@@ -17,11 +17,14 @@ package irks
 import (
 	"iter"
 	"math/rand/v2"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/thediveo/success"
 )
 
 func collectIRQs(it iter.Seq[IRQ]) []IRQ {
@@ -45,13 +48,13 @@ var _ = Describe("irksome", func() {
 	When("determining online CPU numbers", func() {
 
 		It("returns an empty list for malformed lines", func() {
-			Expect(cpuList([]byte(""))).To(BeEmpty())
-			Expect(cpuList([]byte("  FOO0 FOO1"))).To(BeEmpty())
-			Expect(cpuList([]byte("  CPUA CPU42"))).To(BeEmpty())
+			Expect(cpuListFromProcInterrupts([]byte(""))).To(BeEmpty())
+			Expect(cpuListFromProcInterrupts([]byte("  FOO0 FOO1"))).To(BeEmpty())
+			Expect(cpuListFromProcInterrupts([]byte("  CPUA CPU42"))).To(BeEmpty())
 		})
 
 		It("returns the correct list", func() {
-			Expect(cpuList([]byte("  CPU1  CPU42  CPU666 "))).To(
+			Expect(cpuListFromProcInterrupts([]byte("  CPU1  CPU42  CPU666 "))).To(
 				HaveExactElements(CPUList{1, 42, 666}))
 		})
 
@@ -121,10 +124,12 @@ var _ = Describe("irksome", func() {
 		})
 
 		It("reads something sensible from /proc/interrupts", func() {
-			numIRQs := 0
+			procinterrupts := Successful(os.ReadFile("/proc/interrupts"))
+			numIRQs := len(regexp.MustCompile(`(?m)^\s*\d+:.+`).FindAllString(string(procinterrupts), -1))
+			Expect(numIRQs).NotTo(BeZero())
+			Expect(AllCounters()).To(HaveLen(numIRQs))
 			numCPUs := 0
 			for irq := range AllCounters() {
-				numIRQs++
 				if numCPUs == 0 {
 					numCPUs = len(irq.CPUs)
 				}
@@ -157,12 +162,12 @@ var _ = Describe("irksome", func() {
 			for i := 0; i < 3; i++ {
 				var randomirq uint
 				for {
-					randomirq = rand.UintN(uint(len(allirqs)))
+					randomirq = allirqs[rand.UintN(uint(len(allirqs)))].Num
 					if !slices.Contains(irqnums, randomirq) {
 						break
 					}
 				}
-				irqnums = append(irqnums, allirqs[randomirq].Num)
+				irqnums = append(irqnums, randomirq)
 			}
 			slices.Sort(irqnums)
 			irqs := collectIRQs(CountersFor(irqnums))
@@ -170,6 +175,72 @@ var _ = Describe("irksome", func() {
 			for i, irqnum := range irqnums {
 				Expect(irqs[i].Num).To(Equal(irqnum))
 			}
+		})
+
+	})
+
+	When("getting CPU affinities", func() {
+
+		DescribeTable("parsing CPU lists",
+			func(s string, aff CPUAffinities) {
+				Expect(cpuList([]byte(s))).To(Equal(aff))
+			},
+			Entry(nil, "", CPUAffinities{}),
+			Entry(nil, "a", CPUAffinities{}),
+			Entry(nil, "42-", CPUAffinities{}),
+			Entry(nil, "42!", CPUAffinities{}),
+			Entry(nil, "42", CPUAffinities{{42, 42}}),
+			Entry(nil, "42,666", CPUAffinities{{42, 42}, {666, 666}}),
+			Entry(nil, "42-666", CPUAffinities{{42, 666}}),
+			Entry(nil, "42,44-45", CPUAffinities{{42, 42}, {44, 45}}),
+			Entry(nil, "42,44-45,666", CPUAffinities{{42, 42}, {44, 45}, {666, 666}}),
+		)
+
+	})
+
+	When("getting IRQ details", func() {
+
+		It("returns nothing then there are errors", func() {
+			Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
+
+		})
+
+		It("returns correct details", func() {
+			Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
+				IRQDetails{
+					Num:        42,
+					Actions:    []string{"foo", "bar"},
+					Affinities: CPUAffinities{{1, 3}, {42, 42}},
+				},
+				IRQDetails{
+					Num:        43,
+					Actions:    []string{"baz"},
+					Affinities: CPUAffinities{{0, 8}, {15, 15}},
+				}))
+		})
+
+		It("aborts iterator", func() {
+			counts := 0
+			for _ = range allIRQDetails("./testdata/mixed") {
+				counts++
+				break
+			}
+			Expect(counts).To(Equal(1))
+		})
+
+		It("reads real IRQ details", func() {
+			counts := 0
+			irqnums := map[uint]struct{}{}
+			for irq := range AllCounters() {
+				irqnums[irq.Num] = struct{}{}
+			}
+			for irqdetail := range AllIRQDetails() {
+				counts++
+				Expect(irqnums).To(HaveKey(irqdetail.Num))
+				Expect(irqdetail.Actions).NotTo(BeEmpty())
+				Expect(irqdetail.Affinities).NotTo(BeEmpty())
+			}
+			Expect(counts).NotTo(BeZero())
 		})
 
 	})

@@ -20,11 +20,9 @@ import (
 	"iter"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 )
-
-// IRQActions maps IRQ numbers to their registered “actions”; a single IRQ can
-// have multiple actions registered.
-type IRQActions map[uint][]string
 
 // IRQ holds the per-CPU interrupt counters for this particular IRQ. Please note
 // that the counters are valid only for the duration of the yield call producing
@@ -32,12 +30,25 @@ type IRQActions map[uint][]string
 // to retain the counters needs to make a copy of them.
 type IRQ struct {
 	Num      uint     // IRQ number
-	Counters []uint64 // per-CPU counters, only valid during callback, then reused.
+	Counters []uint64 // per-CPU counters, valid during a single iteration, then reused.
 	CPUs     CPUList  // list of the number of the CPUs that are currently online.
 }
 
-// CPUList lists the numbers of the CPUs currently being online.
+// CPUList lists the numbers of the CPUs currently being online. It is used to
+// map indices of [IRQ] Counters elements to CPU numbers.
 type CPUList []uint
+
+// IRQDetails provides the list of actions and the currently set CPU affinities
+// for a specific IRQ, as indicated by Num.
+type IRQDetails struct {
+	Num        uint          // IRQ number
+	Actions    []string      // list of IRQ actions
+	Affinities CPUAffinities // effective CPU(s) affinities
+}
+
+// CPUAffinities is a list of CPU [from...to] ranges. CPU numbers are starting
+// from zero.
+type CPUAffinities [][2]uint
 
 // AllCounters returns a single-use iterator that loops over “/proc/interrupts”
 // producing all (non-architecture-specific) IRQs.
@@ -45,12 +56,14 @@ type CPUList []uint
 // The produced IRQ information contains the per-CPU counters for a particular
 // IRQ, but only for CPUs that are currently online.
 func AllCounters() iter.Seq[IRQ] {
-	f, err := os.Open("/proc/interrupts")
-	if err != nil {
-		return nothing
+	return func(yield func(IRQ) bool) {
+		f, err := os.Open("/proc/interrupts")
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		iterateAllCounters(f, nil, yield)
 	}
-	defer f.Close()
-	return allCounters(f, nil)
 }
 
 // CountersFor returns a single-use iterator that loops over “/proc/interrupts”
@@ -61,12 +74,14 @@ func AllCounters() iter.Seq[IRQ] {
 // The produced IRQ information contains the per-CPU counters for a particular
 // IRQ, but only for CPUs that are currently online.
 func CountersFor(sortedirqnums []uint) iter.Seq[IRQ] {
-	f, err := os.Open("/proc/interrupts")
-	if err != nil {
-		return nothing
+	return func(yield func(IRQ) bool) {
+		f, err := os.Open("/proc/interrupts")
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		iterateAllCounters(f, sortedirqnums, yield)
 	}
-	defer f.Close()
-	return allCounters(f, sortedirqnums)
 }
 
 // allCounters returns an iterator looping over the IRQs with their per-CPU
@@ -77,75 +92,79 @@ func CountersFor(sortedirqnums []uint) iter.Seq[IRQ] {
 // report only IRQs listed and skip parsing counters and yielding them for IRQs
 // not listed.
 func allCounters(r io.Reader, irqnums []uint) iter.Seq[IRQ] {
+	return func(yield func(IRQ) bool) {
+		iterateAllCounters(r, irqnums, yield)
+	}
+}
+
+func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 	// Please note that sc.Bytes() returns a slice referencing the scanners
 	// internal memory that becomes invalid with advancing to the next
 	// line/token.
 	sc := bufio.NewScanner(r)
 	if !sc.Scan() {
-		return nothing
+		return
 	}
 	// Processing the first line we learn of the CPUs that are actually online
 	// (their numbers).
-	cpus := cpuList(sc.Bytes())
+	cpus := cpuListFromProcInterrupts(sc.Bytes())
 	numCPUs := len(cpus)
 	if numCPUs == 0 {
-		return nothing
+		return
 	}
-	return func(yield func(IRQ) bool) {
-		irq := IRQ{
-			CPUs:     cpus,
-			Counters: make([]uint64, len(cpus)),
+	irq := IRQ{
+		CPUs:     cpus,
+		Counters: make([]uint64, len(cpus)),
+	}
+	for sc.Scan() {
+		// Fetch the IRQ number from the beginning of the current text line,
+		// ending the iteration when encountering an "unnumbered"
+		// (architecture specific) IRQ.
+		bstr := newBytestring(sc.Bytes())
+		if bstr.SkipSpace() {
+			return
 		}
-		for sc.Scan() {
-			// Fetch the IRQ number from the beginning of the current text line,
-			// ending the iteration when encountering an "unnumbered"
-			// (architecture specific) IRQ.
-			bstr := newBytestring(sc.Bytes())
+		irqno, ok := bstr.Uint64()
+		if !ok {
+			return
+		}
+		if !bstr.SkipText(":") {
+			return
+		}
+
+		// If IRQ filtering is in place, take heed.
+		if irqnums != nil {
+			if _, ok := slices.BinarySearch(irqnums, uint(irqno)); !ok {
+				continue
+			}
+		}
+		irq.Num = uint(irqno)
+
+		// Now consume the per-CPU counters
+		for idx := 0; idx < numCPUs; idx++ {
 			if bstr.SkipSpace() {
 				return
 			}
-			irqno, ok := bstr.Uint64()
+			count, ok := bstr.Uint64()
 			if !ok {
 				return
 			}
-			if !bstr.SkipText(":") {
-				return
-			}
+			irq.Counters[idx] = count
+		}
 
-			// If IRQ filtering is in place, take heed.
-			if irqnums != nil {
-				if _, ok := slices.BinarySearch(irqnums, uint(irqno)); !ok {
-					continue
-				}
-			}
-			irq.Num = uint(irqno)
-
-			// Now consume the per-CPU counters
-			for idx := 0; idx < numCPUs; idx++ {
-				if bstr.SkipSpace() {
-					return
-				}
-				count, ok := bstr.Uint64()
-				if !ok {
-					return
-				}
-				irq.Counters[idx] = count
-			}
-
-			// Push the counters for this IRQ to the consumer of this iterator.
-			if !yield(irq) {
-				return
-			}
+		// Push the counters for this IRQ to the consumer of this iterator.
+		if !yield(irq) {
+			return
 		}
 	}
 }
 
 func nothing(func(IRQ) bool) {}
 
-// cpuList returns the list of CPUs that are currently online, according to the
-// passed text line that must be in the format of the header line from
-// “/proc/interrupts”.
-func cpuList(b []byte) CPUList {
+// cpuListFromProcInterrupts returns the list of CPUs that are currently online,
+// according to the passed text line that must be in the format of the header
+// line from “/proc/interrupts”.
+func cpuListFromProcInterrupts(b []byte) CPUList {
 	bstr := newBytestring(b)
 	numCPUs := bstr.NumFields()
 	if numCPUs == 0 {
@@ -171,4 +190,95 @@ func cpuList(b []byte) CPUList {
 		return nil
 	}
 	return cpuNums
+}
+
+// cpuList returns the CPUAffinities list from the given string.
+func cpuList(b []byte) CPUAffinities {
+	bstr := newBytestring(b)
+	cpus := CPUAffinities{}
+	for {
+		if bstr.EOL() {
+			break
+		}
+		from, ok := bstr.Uint64()
+		if !ok {
+			break
+		}
+		if bstr.EOL() {
+			cpus = append(cpus, [2]uint{uint(from), uint(from)})
+			break
+		}
+		ch, _ := bstr.Next()
+		switch ch {
+		case ',':
+			cpus = append(cpus, [2]uint{uint(from), uint(from)})
+		case '-':
+			to, ok := bstr.Uint64()
+			if !ok {
+				break
+			}
+			cpus = append(cpus, [2]uint{uint(from), uint(to)})
+			ch, ok := bstr.Next()
+			if !ok || ch != ',' {
+				break
+			}
+		default:
+			break
+		}
+	}
+	return cpus
+}
+
+// AllIRQDetails returns an iterator looping over the details of all
+// (non-architecture-specific) IRQs in the system, giving their details as to
+// actions and CPU affinities.
+func AllIRQDetails() iter.Seq[IRQDetails] {
+	return allIRQDetails("")
+}
+
+const (
+	syskernelirqPath = "/sys/kernel/irq/"
+	procirqPath      = "/proc/irq/"
+)
+
+func allIRQDetails(root string) iter.Seq[IRQDetails] {
+	return func(yield func(IRQDetails) bool) {
+		irqDir, err := os.Open(root + syskernelirqPath)
+		if err != nil {
+			return
+		}
+		irqDirEntries, err := irqDir.ReadDir(-1)
+		irqDir.Close()
+		if err != nil {
+			return
+		}
+		for _, irqEntry := range irqDirEntries {
+			if !irqEntry.IsDir() {
+				continue
+			}
+			irqnum, err := strconv.ParseUint(irqEntry.Name(), 10, 64)
+			if err != nil {
+				continue
+			}
+			actions, _ := os.ReadFile(root + syskernelirqPath + irqEntry.Name() + "/actions")
+			if len(actions) < 1 || actions[len(actions)-1] != '\n' {
+				continue
+			}
+			affinities, _ := os.ReadFile(root + procirqPath + irqEntry.Name() + "/effective_affinity_list")
+			if len(affinities) < 1 || affinities[len(affinities)-1] != '\n' {
+				continue
+			}
+			afflist := cpuList(affinities[:len(affinities)-1])
+			if len(afflist) == 0 {
+				continue
+			}
+			if !yield(IRQDetails{
+				Num:        uint(irqnum),
+				Actions:    strings.Split(string(actions[:len(actions)-1]), ","),
+				Affinities: afflist,
+			}) {
+				return
+			}
+		}
+	}
 }

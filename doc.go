@@ -1,6 +1,6 @@
 /*
 Package irks provides information about IRQ counts per CPU on Linux, as well as
-some IRQ “topology information”.
+additional IRQ information about assigned actions and CPUs.
 
 # The Format of /proc/interrupts
 

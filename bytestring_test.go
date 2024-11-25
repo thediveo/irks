@@ -74,6 +74,28 @@ var _ = Describe("byteline", func() {
 
 	})
 
+	When("getting the next byte", func() {
+
+		It("returns !ok at eol", func() {
+			bstr := newBytestring([]byte(""))
+			ch, ok := bstr.Next()
+			Expect(ok).To(BeFalse())
+			Expect(ch).To(BeZero())
+		})
+
+		It("returns the next byte", func() {
+			bstr := newBytestring([]byte("AB"))
+			ch, ok := bstr.Next()
+			Expect(ok).To(BeTrue())
+			Expect(ch).To(Equal(byte('A')))
+			ch, ok = bstr.Next()
+			Expect(ok).To(BeTrue())
+			Expect(ch).To(Equal(byte('B')))
+			Expect(bstr.EOL()).To(BeTrue())
+		})
+
+	})
+
 	When("parsing numbers", func() {
 
 		It("requires at least one digit", func() {

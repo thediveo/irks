@@ -72,6 +72,17 @@ func (b *bytestring) SkipText(s string) (ok bool) {
 	return true
 }
 
+// Next returns the next byte from the bytestring and ok true, otherwise ok
+// false.
+func (b *bytestring) Next() (ch byte, ok bool) {
+	if b.pos >= len(b.b) {
+		return 0, false
+	}
+	ch = b.b[b.pos]
+	b.pos++
+	return ch, true
+}
+
 // Uint64 parses the number starting in the buffer at the current position until
 // a character other than 0-9 is encountered, or EOL. The number must consist of
 // at least a single digit. If successful, Uint64 returns the number and true;
