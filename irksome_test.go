@@ -221,7 +221,7 @@ var _ = Describe("irksome", func() {
 
 		It("aborts iterator", func() {
 			counts := 0
-			for _ = range allIRQDetails("./testdata/mixed") {
+			for range allIRQDetails("./testdata/mixed") {
 				counts++
 				break
 			}
