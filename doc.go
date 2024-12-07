@@ -1,12 +1,28 @@
 /*
-Package irks provides information about IRQ counts per CPU on Linux, as well as
-additional IRQ information about assigned actions and CPUs.
+Package irks provides information about interrupt counts per IRQ and CPU on
+Linux, as well as additional IRQ information about assigned actions and CPU
+affinities. It returns information only about “hardware” IRQs, that is, IRQs
+with an IRQ number, as opposed to some alphanumeric identifier.
+
+# The Term “CPU”
+
+Throughout the irks module we use the term “CPU” as used by the Linux kernel,
+its ABI, and associated CLI tools, such as [lscpu(1)]. Here, a “CPU” (without
+any appendix such as “core”) has a logical CPU number assigned and executes code
+(at least seemingly) independently from other CPUs.
+
+In contrast, a “core” in Linux kernel speak is an aggregation level where a core
+can contain several CPUs. In the end, “core” is a concept of physical topology.
+
+But in irks, all we care about are CPUs, not their physical topologies. They can
+form towers of Hammurabi or Hanoi, if they so please, but we don't care. Thus,
+no “cores” or whatsoever.
 
 # The Format of /proc/interrupts
 
 Unfortunately, the man page for [proc_interrupts(5)] has not much to say, except
 “Very easy to read formatting, done in ASCII.” This “explanation” almost comical
-in a true Hitchhiker's Guide way of fashion.
+in a true [Hitchhiker's Guide style].
 
 Digging into the Linux kernel sources luckily brings up [show_interrupts] that
 then spills the beans about the format of the “/proc/interrupts” pseudo file.
@@ -83,5 +99,7 @@ function is to show and control the IRQ-to-CPU(s) affinities.
 [architecture-specific interrupts]: https://elixir.bootlin.com/linux/v6.12/source/arch/x86/kernel/irq.c#L61
 [register_handler_proc]: https://elixir.bootlin.com/linux/v6.12/source/kernel/irq/proc.c#L317
 [kernel ABI testing documentation on /sys/kernel/irq]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-kernel-irq
+[lscpu(1)]: https://github.com/util-linux/util-linux/blob/e08e3d587c4f4405ad64b3d2c1ae728ebea5fa46/sys-utils/lscpu.1.adoc
+[Hitchhiker's Guide style]: https://en.wikipedia.org/wiki/Phrases_from_The_Hitchhiker%27s_Guide_to_the_Galaxy#Mostly_Harmless
 */
 package irks
