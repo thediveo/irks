@@ -159,8 +159,6 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 	}
 }
 
-func nothing(func(IRQ) bool) {}
-
 // cpuListFromProcInterrupts returns the list of CPUs that are currently online,
 // according to the passed text line that must be in the format of the header
 // line from “/proc/interrupts”.
@@ -195,6 +193,8 @@ func cpuListFromProcInterrupts(b []byte) CPUList {
 // cpuList returns the CPUAffinities list from the given string.
 func cpuList(b []byte) CPUAffinities {
 	bstr := newBytestring(b)
+	// nota bene: not using make(...) saves us somehow 3 allocs overall and
+	// decreases memory consumption. compiler optimization??
 	cpus := CPUAffinities{}
 	for {
 		if bstr.EOL() {
@@ -239,6 +239,9 @@ func AllIRQDetails() iter.Seq[IRQDetails] {
 const (
 	syskernelirqPath = "/sys/kernel/irq/"
 	procirqPath      = "/proc/irq/"
+
+	actionsNode           = "/actions"
+	effectiveAffinityNode = "/effective_affinity_list"
 )
 
 func allIRQDetails(root string) iter.Seq[IRQDetails] {
@@ -252,6 +255,11 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 		if err != nil {
 			return
 		}
+
+		// Using bytes.Buffer instead of assembling path strings piecewise
+		// doesn't buy us anything above the noise floor, even with
+		// preallocating the buffer's capacity once and then truncating back to
+		// the root.
 		for _, irqEntry := range irqDirEntries {
 			if !irqEntry.IsDir() {
 				continue
@@ -260,11 +268,11 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			if err != nil {
 				continue
 			}
-			actions, _ := os.ReadFile(root + syskernelirqPath + irqEntry.Name() + "/actions")
+			actions, _ := os.ReadFile(root + syskernelirqPath + irqEntry.Name() + actionsNode)
 			if len(actions) < 1 || actions[len(actions)-1] != '\n' {
 				continue
 			}
-			affinities, _ := os.ReadFile(root + procirqPath + irqEntry.Name() + "/effective_affinity_list")
+			affinities, _ := os.ReadFile(root + procirqPath + irqEntry.Name() + effectiveAffinityNode)
 			if len(affinities) < 1 || affinities[len(affinities)-1] != '\n' {
 				continue
 			}
