@@ -260,6 +260,8 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 		// doesn't buy us anything above the noise floor, even with
 		// preallocating the buffer's capacity once and then truncating back to
 		// the root.
+		var contents []byte
+		var details IRQDetails
 		for _, irqEntry := range irqDirEntries {
 			if !irqEntry.IsDir() {
 				continue
@@ -268,25 +270,57 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			if err != nil {
 				continue
 			}
-			actions, _ := os.ReadFile(root + syskernelirqPath + irqEntry.Name() + actionsNode)
-			if len(actions) < 1 || actions[len(actions)-1] != '\n' {
+			details.Num = uint(irqnum)
+
+			contents, _ = readFile(root+syskernelirqPath+irqEntry.Name()+actionsNode, contents)
+			if len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
-			affinities, _ := os.ReadFile(root + procirqPath + irqEntry.Name() + effectiveAffinityNode)
-			if len(affinities) < 1 || affinities[len(affinities)-1] != '\n' {
+			details.Actions = strings.Split(string(contents[:len(contents)-1]), ",")
+
+			contents, _ = readFile(root+procirqPath+irqEntry.Name()+effectiveAffinityNode, contents)
+			if len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
-			afflist := cpuList(affinities[:len(affinities)-1])
+			afflist := cpuList(contents[:len(contents)-1])
 			if len(afflist) == 0 {
 				continue
 			}
-			if !yield(IRQDetails{
-				Num:        uint(irqnum),
-				Actions:    strings.Split(string(actions[:len(actions)-1]), ","),
-				Affinities: afflist,
-			}) {
+			details.Affinities = afflist
+
+			if !yield(details) {
 				return
 			}
+		}
+	}
+}
+
+func readFile(name string, buff []byte) ([]byte, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	size := 512
+	data := buff[:0]
+	if size > cap(data) {
+		data = make([]byte, 0, size)
+	}
+
+	for {
+		n, err := f.Read(data[len(data):cap(data)])
+		data = data[:len(data)+n]
+		if err != nil {
+			if err == io.EOF {
+				return data, nil
+			}
+			return data, err
+		}
+
+		if len(data) >= cap(data) {
+			d := append(data[:cap(data)], 0)
+			data = d[:len(data)]
 		}
 	}
 }
