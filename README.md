@@ -1,6 +1,6 @@
 # irks
 
-![Coverage](https://img.shields.io/badge/Coverage-98.1%25-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-98.2%25-brightgreen)
 
 `irks` is a Go module for retrieving IRQ counters, structure, and CPU affinity.
 
