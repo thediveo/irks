@@ -1,0 +1,31 @@
+name: build and test
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+      - develop
+
+jobs:
+
+  buildandtest:
+    name: Build and Test on Go ${{matrix.go}}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ 'stable' ] # no 'oldstable' until go 1.24 has been released
+    steps:
+
+      - name: Set up Go ${{matrix.go}}
+        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # pin@v5
+        with:
+          go-version: ${{matrix.go}}
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+
+      - name: Test
+        run: go test -v -p=1 -race ./...
