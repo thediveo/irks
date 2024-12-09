@@ -2,7 +2,7 @@
 Package irks provides information about interrupt counts per IRQ and CPU on
 Linux, as well as additional IRQ information about assigned actions and CPU
 affinities. It returns information only about “hardware” IRQs, that is, IRQs
-with an IRQ number, as opposed to some alphanumeric identifier.
+with an IRQ number, as opposed to interrupts with alphanumeric identifiers.
 
 # The Term “CPU”
 
@@ -21,8 +21,8 @@ no “cores” or whatsoever.
 # The Format of /proc/interrupts
 
 Unfortunately, the man page for [proc_interrupts(5)] has not much to say, except
-“Very easy to read formatting, done in ASCII.” This “explanation” almost comical
-in a true [Hitchhiker's Guide style].
+“Very easy to read formatting, done in ASCII.” This “explanation” is almost
+comical in a true [Hitchhiker's Guide style].
 
 Digging into the Linux kernel sources luckily brings up [show_interrupts] that
 then spills the beans about the format of the “/proc/interrupts” pseudo file.

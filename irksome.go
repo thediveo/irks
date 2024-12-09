@@ -20,8 +20,8 @@ import (
 	"iter"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
+
+	"github.com/thediveo/faf"
 )
 
 // IRQ holds the per-CPU interrupt counters for this particular IRQ. Please note
@@ -37,18 +37,6 @@ type IRQ struct {
 // CPUList lists the numbers of the CPUs currently being online. It is used to
 // map indices of [IRQ] Counters elements to CPU numbers.
 type CPUList []uint
-
-// IRQDetails provides the list of actions and the currently set CPU affinities
-// for a specific IRQ, as indicated by Num.
-type IRQDetails struct {
-	Num        uint          // IRQ number
-	Actions    []string      // list of IRQ actions
-	Affinities CPUAffinities // effective CPU(s) affinities
-}
-
-// CPUAffinities is a list of CPU [from...to] ranges. CPU numbers are starting
-// from zero.
-type CPUAffinities [][2]uint
 
 // AllCounters returns a single-use iterator that loops over “/proc/interrupts”
 // producing all (non-architecture-specific) IRQs.
@@ -120,7 +108,7 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 		// Fetch the IRQ number from the beginning of the current text line,
 		// ending the iteration when encountering an "unnumbered"
 		// (architecture specific) IRQ.
-		bstr := newBytestring(sc.Bytes())
+		bstr := faf.NewBytestring(sc.Bytes())
 		if bstr.SkipSpace() {
 			return
 		}
@@ -159,13 +147,11 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 	}
 }
 
-func nothing(func(IRQ) bool) {}
-
 // cpuListFromProcInterrupts returns the list of CPUs that are currently online,
 // according to the passed text line that must be in the format of the header
 // line from “/proc/interrupts”.
 func cpuListFromProcInterrupts(b []byte) CPUList {
-	bstr := newBytestring(b)
+	bstr := faf.NewBytestring(b)
 	numCPUs := bstr.NumFields()
 	if numCPUs == 0 {
 		return nil
@@ -194,7 +180,9 @@ func cpuListFromProcInterrupts(b []byte) CPUList {
 
 // cpuList returns the CPUAffinities list from the given string.
 func cpuList(b []byte) CPUAffinities {
-	bstr := newBytestring(b)
+	bstr := faf.NewBytestring(b)
+	// nota bene: not using make(...) saves us somehow 3 allocs overall and
+	// decreases memory consumption. compiler optimization??
 	cpus := CPUAffinities{}
 	for {
 		if bstr.EOL() {
@@ -227,58 +215,4 @@ func cpuList(b []byte) CPUAffinities {
 		}
 	}
 	return cpus
-}
-
-// AllIRQDetails returns an iterator looping over the details of all
-// (non-architecture-specific) IRQs in the system, giving their details as to
-// actions and CPU affinities.
-func AllIRQDetails() iter.Seq[IRQDetails] {
-	return allIRQDetails("")
-}
-
-const (
-	syskernelirqPath = "/sys/kernel/irq/"
-	procirqPath      = "/proc/irq/"
-)
-
-func allIRQDetails(root string) iter.Seq[IRQDetails] {
-	return func(yield func(IRQDetails) bool) {
-		irqDir, err := os.Open(root + syskernelirqPath)
-		if err != nil {
-			return
-		}
-		irqDirEntries, err := irqDir.ReadDir(-1)
-		irqDir.Close()
-		if err != nil {
-			return
-		}
-		for _, irqEntry := range irqDirEntries {
-			if !irqEntry.IsDir() {
-				continue
-			}
-			irqnum, err := strconv.ParseUint(irqEntry.Name(), 10, 64)
-			if err != nil {
-				continue
-			}
-			actions, _ := os.ReadFile(root + syskernelirqPath + irqEntry.Name() + "/actions")
-			if len(actions) < 1 || actions[len(actions)-1] != '\n' {
-				continue
-			}
-			affinities, _ := os.ReadFile(root + procirqPath + irqEntry.Name() + "/effective_affinity_list")
-			if len(affinities) < 1 || affinities[len(affinities)-1] != '\n' {
-				continue
-			}
-			afflist := cpuList(affinities[:len(affinities)-1])
-			if len(afflist) == 0 {
-				continue
-			}
-			if !yield(IRQDetails{
-				Num:        uint(irqnum),
-				Actions:    strings.Split(string(actions[:len(actions)-1]), ","),
-				Affinities: afflist,
-			}) {
-				return
-			}
-		}
-	}
 }
