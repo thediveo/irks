@@ -20,8 +20,8 @@ import (
 	"iter"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
+
+	"github.com/thediveo/faf"
 )
 
 // IRQ holds the per-CPU interrupt counters for this particular IRQ. Please note
@@ -37,18 +37,6 @@ type IRQ struct {
 // CPUList lists the numbers of the CPUs currently being online. It is used to
 // map indices of [IRQ] Counters elements to CPU numbers.
 type CPUList []uint
-
-// IRQDetails provides the list of actions and the currently set CPU affinities
-// for a specific IRQ, as indicated by Num.
-type IRQDetails struct {
-	Num        uint          // IRQ number
-	Actions    []string      // list of IRQ actions
-	Affinities CPUAffinities // effective CPU(s) affinities
-}
-
-// CPUAffinities is a list of CPU [from...to] ranges. CPU numbers are starting
-// from zero.
-type CPUAffinities [][2]uint
 
 // AllCounters returns a single-use iterator that loops over “/proc/interrupts”
 // producing all (non-architecture-specific) IRQs.
@@ -120,7 +108,7 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 		// Fetch the IRQ number from the beginning of the current text line,
 		// ending the iteration when encountering an "unnumbered"
 		// (architecture specific) IRQ.
-		bstr := newBytestring(sc.Bytes())
+		bstr := faf.NewBytestring(sc.Bytes())
 		if bstr.SkipSpace() {
 			return
 		}
@@ -163,7 +151,7 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 // according to the passed text line that must be in the format of the header
 // line from “/proc/interrupts”.
 func cpuListFromProcInterrupts(b []byte) CPUList {
-	bstr := newBytestring(b)
+	bstr := faf.NewBytestring(b)
 	numCPUs := bstr.NumFields()
 	if numCPUs == 0 {
 		return nil
@@ -192,7 +180,7 @@ func cpuListFromProcInterrupts(b []byte) CPUList {
 
 // cpuList returns the CPUAffinities list from the given string.
 func cpuList(b []byte) CPUAffinities {
-	bstr := newBytestring(b)
+	bstr := faf.NewBytestring(b)
 	// nota bene: not using make(...) saves us somehow 3 allocs overall and
 	// decreases memory consumption. compiler optimization??
 	cpus := CPUAffinities{}
@@ -227,100 +215,4 @@ func cpuList(b []byte) CPUAffinities {
 		}
 	}
 	return cpus
-}
-
-// AllIRQDetails returns an iterator looping over the details of all
-// (non-architecture-specific) IRQs in the system, giving their details as to
-// actions and CPU affinities.
-func AllIRQDetails() iter.Seq[IRQDetails] {
-	return allIRQDetails("")
-}
-
-const (
-	syskernelirqPath = "/sys/kernel/irq/"
-	procirqPath      = "/proc/irq/"
-
-	actionsNode           = "/actions"
-	effectiveAffinityNode = "/effective_affinity_list"
-)
-
-func allIRQDetails(root string) iter.Seq[IRQDetails] {
-	return func(yield func(IRQDetails) bool) {
-		irqDir, err := os.Open(root + syskernelirqPath)
-		if err != nil {
-			return
-		}
-		irqDirEntries, err := irqDir.ReadDir(-1)
-		irqDir.Close()
-		if err != nil {
-			return
-		}
-
-		// Using bytes.Buffer instead of assembling path strings piecewise
-		// doesn't buy us anything above the noise floor, even with
-		// preallocating the buffer's capacity once and then truncating back to
-		// the root.
-		var contents []byte
-		var details IRQDetails
-		for _, irqEntry := range irqDirEntries {
-			if !irqEntry.IsDir() {
-				continue
-			}
-			irqnum, err := strconv.ParseUint(irqEntry.Name(), 10, 64)
-			if err != nil {
-				continue
-			}
-			details.Num = uint(irqnum)
-
-			contents, _ = readFile(root+syskernelirqPath+irqEntry.Name()+actionsNode, contents)
-			if len(contents) < 1 || contents[len(contents)-1] != '\n' {
-				continue
-			}
-			details.Actions = strings.Split(string(contents[:len(contents)-1]), ",")
-
-			contents, _ = readFile(root+procirqPath+irqEntry.Name()+effectiveAffinityNode, contents)
-			if len(contents) < 1 || contents[len(contents)-1] != '\n' {
-				continue
-			}
-			afflist := cpuList(contents[:len(contents)-1])
-			if len(afflist) == 0 {
-				continue
-			}
-			details.Affinities = afflist
-
-			if !yield(details) {
-				return
-			}
-		}
-	}
-}
-
-func readFile(name string, buff []byte) ([]byte, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	size := 512
-	data := buff[:0]
-	if size > cap(data) {
-		data = make([]byte, 0, size)
-	}
-
-	for {
-		n, err := f.Read(data[len(data):cap(data)])
-		data = data[:len(data)+n]
-		if err != nil {
-			if err == io.EOF {
-				return data, nil
-			}
-			return data, err
-		}
-
-		if len(data) >= cap(data) {
-			d := append(data[:cap(data)], 0)
-			data = d[:len(data)]
-		}
-	}
 }

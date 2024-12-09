@@ -209,12 +209,12 @@ var _ = Describe("irksome", func() {
 			Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
 				IRQDetails{
 					Num:        42,
-					Actions:    []string{"foo", "bar"},
+					Actions:    "foo,bar",
 					Affinities: CPUAffinities{{1, 3}, {42, 42}},
 				},
 				IRQDetails{
 					Num:        43,
-					Actions:    []string{"baz"},
+					Actions:    "baz",
 					Affinities: CPUAffinities{{0, 8}, {15, 15}},
 				}))
 		})
