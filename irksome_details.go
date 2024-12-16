@@ -36,7 +36,7 @@ type CPUAffinities [][2]uint
 // (non-architecture-specific) IRQs in the system, giving their details as to
 // actions and CPU affinities.
 //
-// AllIRQDetails uses a streamlined implementation that runs at approx 1.9× the
+// AllIRQDetails uses a streamlined implementation that runs at approx 1.8× the
 // execution speed compared to a “traditional” Go implementation approach using
 // [os.File.ReadDir], [strconv.ParseUint] and [os.ReadFile]. For the same system
 // with 47 hardware IRQs, we only need at around 10% of memory on the heap, and
