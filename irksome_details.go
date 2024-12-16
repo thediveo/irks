@@ -95,3 +95,45 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 		}
 	}
 }
+
+// cpuList returns the CPUAffinities list from the given byte slice. Passing a
+// byte slice instead of a string avoids any potentially costly conversions from
+// mutable byte slices to immutable strings out of the game without really
+// complicating things in this case.
+func cpuList(b []byte) CPUAffinities {
+	bstr := faf.NewBytestring(b)
+	// nota bene: not using make(...) saves us somehow 3 allocs overall and
+	// decreases memory consumption. compiler optimization??
+	cpus := CPUAffinities{}
+	for {
+		if bstr.EOL() {
+			break
+		}
+		from, ok := bstr.Uint64()
+		if !ok {
+			break
+		}
+		if bstr.EOL() {
+			cpus = append(cpus, [2]uint{uint(from), uint(from)})
+			break
+		}
+		ch, _ := bstr.Next()
+		switch ch {
+		case ',':
+			cpus = append(cpus, [2]uint{uint(from), uint(from)})
+		case '-':
+			to, ok := bstr.Uint64()
+			if !ok {
+				break
+			}
+			cpus = append(cpus, [2]uint{uint(from), uint(to)})
+			ch, ok := bstr.Next()
+			if !ok || ch != ',' {
+				break
+			}
+		default:
+			break
+		}
+	}
+	return cpus
+}

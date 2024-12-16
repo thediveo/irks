@@ -29,16 +29,16 @@ goos: linux
 goarch: amd64
 pkg: github.com/thediveo/irks
 cpu: AMD Ryzen 9 7950X 16-Core Processor
-BenchmarkIRQDetailsOsReadDir                8337           1278516 ns/op          632801 B/op       1255 allocs/op
-BenchmarkIRQDetailsOsReadDir-4              8763           1340999 ns/op          633533 B/op       1255 allocs/op
-BenchmarkIRQDetails                        15948            739545 ns/op           65787 B/op        413 allocs/op
-BenchmarkIRQDetails-4                      16454            726045 ns/op           65796 B/op        413 allocs/op
+BenchmarkIRQDetailsOsReadDir                9699           1140566 ns/op          632802 B/op       1255 allocs/op
+BenchmarkIRQDetailsOsReadDir-4              9818           1166176 ns/op          633568 B/op       1255 allocs/op
+BenchmarkIRQDetails                        17660            675672 ns/op           65787 B/op        413 allocs/op
+BenchmarkIRQDetails-4                      18022            662177 ns/op           65795 B/op        413 allocs/op
 
 */
 
-// AllIRQDetailsTraditional does it the traditional Gopher way, using
+// AllIRQDetailsOsReadDir does it the traditional Gopher way, using
 // os.File.ReadDir and os.ReadFile, so we have the benchmarking reference.
-func AllIRQDetailsTraditional(root string) iter.Seq[IRQDetails] {
+func AllIRQDetailsOsReadDir(root string) iter.Seq[IRQDetails] {
 	return func(yield func(IRQDetails) bool) {
 		irqDir, err := os.Open(root + syskernelirqPath)
 		if err != nil {
@@ -50,10 +50,6 @@ func AllIRQDetailsTraditional(root string) iter.Seq[IRQDetails] {
 			return
 		}
 
-		// Using bytes.Buffer instead of assembling path strings piecewise
-		// doesn't buy us anything above the noise floor, even with
-		// preallocating the buffer's capacity once and then truncating back to
-		// the root.
 		var details IRQDetails
 		for _, irqEntry := range irqDirEntries {
 			if !irqEntry.IsDir() {
@@ -88,13 +84,17 @@ func AllIRQDetailsTraditional(root string) iter.Seq[IRQDetails] {
 	}
 }
 
+// Benchmark reading IRQ details using the traditional best practise including
+// os.ReadDir and os.ReadFile.
 func BenchmarkIRQDetailsOsReadDir(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		for range AllIRQDetailsTraditional("") {
+		for range AllIRQDetailsOsReadDir("") {
 		}
 	}
 }
 
+// Benchmark reading IRQ details using optimized faf.ReadDir, faf.ReadFile,
+// faf.ParseUint, et cetera.
 func BenchmarkIRQDetails(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		for range allIRQDetails("") {
