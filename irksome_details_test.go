@@ -42,7 +42,7 @@ var _ = Describe("irksome details", func() {
 
 	When("getting IRQ details", func() {
 
-		It("returns nothing then there are errors", func() {
+		It("returns nothing when there are errors", func() {
 			Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
 
 		})
