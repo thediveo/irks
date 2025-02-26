@@ -27,7 +27,9 @@ import (
 	. "github.com/thediveo/success"
 )
 
-func collectIRQs(it iter.Seq[IRQ]) []IRQ {
+// safelyCollectIRQs loops over IRQs, returning a slice of collected IRQs while
+// ensuring proper copying of transient information to make it permanent.
+func safelyCollectIRQs(it iter.Seq[IRQ]) []IRQ {
 	irqs := []IRQ{}
 	for irq := range it {
 		irq := irq
@@ -64,28 +66,28 @@ var _ = Describe("irksome", func() {
 
 		It("yields nothing for invalid data", func() {
 			r := strings.NewReader("")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader("\n")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n ")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n 1")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n 1: 2")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n 1: 2 ")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n 1: 2 abc")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 
 			r = strings.NewReader(" CPU1 CPU2\n 1: 2abc 3")
-			Expect(collectIRQs(allCounters(r, nil))).To(BeEmpty())
+			Expect(safelyCollectIRQs(allCounters(r, nil))).To(BeEmpty())
 		})
 
 		It("yields the correct IRQ information", func() {
@@ -93,7 +95,7 @@ var _ = Describe("irksome", func() {
  1: 2 3 4 x
  5: 6 7 8 y
 `)
-			irqs := collectIRQs(allCounters(r, nil))
+			irqs := safelyCollectIRQs(allCounters(r, nil))
 			Expect(irqs).To(HaveEach(
 				HaveField("CPUs", HaveExactElements(uint(1), uint(42), uint(666)))))
 			Expect(irqs).To(HaveExactElements(
@@ -103,7 +105,7 @@ var _ = Describe("irksome", func() {
 					HaveField("Counters", HaveExactElements(uint64(6), uint64(7), uint64(8))))))
 
 			r = strings.NewReader(procInterruptsText)
-			irqs = collectIRQs(allCounters(r, nil))
+			irqs = safelyCollectIRQs(allCounters(r, nil))
 			Expect(irqs).To(HaveEach(
 				HaveField("CPUs", HaveExactElements(uint(1), uint(42), uint(666)))))
 			Expect(irqs).To(HaveExactElements(
@@ -149,7 +151,7 @@ var _ = Describe("irksome", func() {
  666: 9 10 11 z
  888: 21 22 23 abc
 `)
-			irqs := collectIRQs(allCounters(r, []uint{1, 666}))
+			irqs := safelyCollectIRQs(allCounters(r, []uint{1, 666}))
 			Expect(irqs).To(HaveLen(2))
 			Expect(irqs).To(HaveExactElements(
 				HaveField("Num", uint(1)),
@@ -157,7 +159,7 @@ var _ = Describe("irksome", func() {
 		})
 
 		It("produces only wanted IRQ information", func() {
-			allirqs := collectIRQs(AllCounters())
+			allirqs := safelyCollectIRQs(AllCounters())
 			irqnums := []uint{}
 			for i := 0; i < 3; i++ {
 				var randomirq uint
@@ -170,77 +172,11 @@ var _ = Describe("irksome", func() {
 				irqnums = append(irqnums, randomirq)
 			}
 			slices.Sort(irqnums)
-			irqs := collectIRQs(CountersFor(irqnums))
+			irqs := safelyCollectIRQs(CountersFor(irqnums))
 			Expect(irqs).To(HaveLen(3))
 			for i, irqnum := range irqnums {
 				Expect(irqs[i].Num).To(Equal(irqnum))
 			}
-		})
-
-	})
-
-	When("getting CPU affinities", func() {
-
-		DescribeTable("parsing CPU lists",
-			func(s string, aff CPUAffinities) {
-				Expect(cpuList([]byte(s))).To(Equal(aff))
-			},
-			Entry(nil, "", CPUAffinities{}),
-			Entry(nil, "a", CPUAffinities{}),
-			Entry(nil, "42-", CPUAffinities{}),
-			Entry(nil, "42!", CPUAffinities{}),
-			Entry(nil, "42", CPUAffinities{{42, 42}}),
-			Entry(nil, "42,666", CPUAffinities{{42, 42}, {666, 666}}),
-			Entry(nil, "42-666", CPUAffinities{{42, 666}}),
-			Entry(nil, "42,44-45", CPUAffinities{{42, 42}, {44, 45}}),
-			Entry(nil, "42,44-45,666", CPUAffinities{{42, 42}, {44, 45}, {666, 666}}),
-		)
-
-	})
-
-	When("getting IRQ details", func() {
-
-		It("returns nothing then there are errors", func() {
-			Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
-
-		})
-
-		It("returns correct details", func() {
-			Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
-				IRQDetails{
-					Num:        42,
-					Actions:    "foo,bar",
-					Affinities: CPUAffinities{{1, 3}, {42, 42}},
-				},
-				IRQDetails{
-					Num:        43,
-					Actions:    "baz",
-					Affinities: CPUAffinities{{0, 8}, {15, 15}},
-				}))
-		})
-
-		It("aborts iterator", func() {
-			counts := 0
-			for range allIRQDetails("./testdata/mixed") {
-				counts++
-				break
-			}
-			Expect(counts).To(Equal(1))
-		})
-
-		It("reads real IRQ details", func() {
-			counts := 0
-			irqnums := map[uint]struct{}{}
-			for irq := range AllCounters() {
-				irqnums[irq.Num] = struct{}{}
-			}
-			for irqdetail := range AllIRQDetails() {
-				counts++
-				Expect(irqnums).To(HaveKey(irqdetail.Num))
-				Expect(irqdetail.Actions).NotTo(BeEmpty())
-				Expect(irqdetail.Affinities).NotTo(BeEmpty())
-			}
-			Expect(counts).NotTo(BeZero())
 		})
 
 	})

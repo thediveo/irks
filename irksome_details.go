@@ -17,26 +17,23 @@ package irks
 import (
 	"iter"
 
+	"github.com/thediveo/cpus"
 	"github.com/thediveo/faf"
 )
 
 // IRQDetails provides the list of actions and the currently set CPU affinities
 // for a specific IRQ, as indicated by Num.
 type IRQDetails struct {
-	Num        uint          // IRQ number
-	Actions    string        // list of IRQ actions
-	Affinities CPUAffinities // effective CPU(s) affinities
+	Num        uint      // IRQ number
+	Actions    string    // list of IRQ actions
+	Affinities cpus.List // effective CPU(s) affinities
 }
-
-// CPUAffinities is a list of CPU [from...to] ranges. CPU numbers are starting
-// from zero.
-type CPUAffinities [][2]uint
 
 // AllIRQDetails returns an iterator looping over the details of all
 // (non-architecture-specific) IRQs in the system, giving their details as to
 // actions and CPU affinities.
 //
-// AllIRQDetails uses a streamlined implementation that runs at approx 1.9× the
+// AllIRQDetails uses a streamlined implementation that runs at approx 1.8× the
 // execution speed compared to a “traditional” Go implementation approach using
 // [os.File.ReadDir], [strconv.ParseUint] and [os.ReadFile]. For the same system
 // with 47 hardware IRQs, we only need at around 10% of memory on the heap, and
@@ -83,8 +80,8 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			if !ok || len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
-			afflist := cpuList(contents[:len(contents)-1])
-			if len(afflist) == 0 {
+			afflist, err := cpus.NewList(contents[:len(contents)-1])
+			if err != nil || len(afflist) == 0 {
 				continue
 			}
 			details.Affinities = afflist
