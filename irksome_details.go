@@ -17,20 +17,17 @@ package irks
 import (
 	"iter"
 
+	"github.com/thediveo/cpus"
 	"github.com/thediveo/faf"
 )
 
 // IRQDetails provides the list of actions and the currently set CPU affinities
 // for a specific IRQ, as indicated by Num.
 type IRQDetails struct {
-	Num        uint          // IRQ number
-	Actions    string        // list of IRQ actions
-	Affinities CPUAffinities // effective CPU(s) affinities
+	Num        uint      // IRQ number
+	Actions    string    // list of IRQ actions
+	Affinities cpus.List // effective CPU(s) affinities
 }
-
-// CPUAffinities is a list of CPU [from...to] ranges. CPU numbers are starting
-// from zero.
-type CPUAffinities [][2]uint
 
 // AllIRQDetails returns an iterator looping over the details of all
 // (non-architecture-specific) IRQs in the system, giving their details as to
@@ -83,8 +80,8 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			if !ok || len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
-			afflist := cpuList(contents[:len(contents)-1])
-			if len(afflist) == 0 {
+			afflist, err := cpus.NewList(contents[:len(contents)-1])
+			if err != nil || len(afflist) == 0 {
 				continue
 			}
 			details.Affinities = afflist
@@ -94,46 +91,4 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			}
 		}
 	}
-}
-
-// cpuList returns the CPUAffinities list from the given byte slice. Passing a
-// byte slice instead of a string avoids any potentially costly conversions from
-// mutable byte slices to immutable strings out of the game without really
-// complicating things in this case.
-func cpuList(b []byte) CPUAffinities {
-	bstr := faf.NewBytestring(b)
-	// nota bene: not using make(...) saves us somehow 3 allocs overall and
-	// decreases memory consumption. compiler optimization??
-	cpus := CPUAffinities{}
-	for {
-		if bstr.EOL() {
-			break
-		}
-		from, ok := bstr.Uint64()
-		if !ok {
-			break
-		}
-		if bstr.EOL() {
-			cpus = append(cpus, [2]uint{uint(from), uint(from)})
-			break
-		}
-		ch, _ := bstr.Next()
-		switch ch {
-		case ',':
-			cpus = append(cpus, [2]uint{uint(from), uint(from)})
-		case '-':
-			to, ok := bstr.Uint64()
-			if !ok {
-				break
-			}
-			cpus = append(cpus, [2]uint{uint(from), uint(to)})
-			ch, ok := bstr.Next()
-			if !ok || ch != ',' {
-				break
-			}
-		default:
-			break
-		}
-	}
-	return cpus
 }

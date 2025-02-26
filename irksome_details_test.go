@@ -15,76 +15,56 @@
 package irks
 
 import (
+	"github.com/thediveo/cpus"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/thediveo/success"
 )
 
 var _ = Describe("irksome details", func() {
 
-	When("getting CPU affinities", func() {
-
-		DescribeTable("parsing CPU lists",
-			func(s string, aff CPUAffinities) {
-				Expect(cpuList([]byte(s))).To(Equal(aff))
-			},
-			Entry(nil, "", CPUAffinities{}),
-			Entry(nil, "a", CPUAffinities{}),
-			Entry(nil, "42-", CPUAffinities{}),
-			Entry(nil, "42!", CPUAffinities{}),
-			Entry(nil, "42", CPUAffinities{{42, 42}}),
-			Entry(nil, "42,666", CPUAffinities{{42, 42}, {666, 666}}),
-			Entry(nil, "42-666", CPUAffinities{{42, 666}}),
-			Entry(nil, "42,44-45", CPUAffinities{{42, 42}, {44, 45}}),
-			Entry(nil, "42,44-45,666", CPUAffinities{{42, 42}, {44, 45}, {666, 666}}),
-		)
+	It("returns nothing then there are errors", func() {
+		Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
 
 	})
 
-	When("getting IRQ details", func() {
+	It("returns correct details", func() {
+		Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
+			IRQDetails{
+				Num:        42,
+				Actions:    "foo,bar",
+				Affinities: Successful(cpus.NewList([]byte("1-3,42"))),
+			},
+			IRQDetails{
+				Num:        43,
+				Actions:    "baz",
+				Affinities: Successful(cpus.NewList([]byte("0-8,15"))),
+			}))
+	})
 
-		It("returns nothing then there are errors", func() {
-			Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
+	It("aborts iterator", func() {
+		counts := 0
+		for range allIRQDetails("./testdata/mixed") {
+			counts++
+			break
+		}
+		Expect(counts).To(Equal(1))
+	})
 
-		})
-
-		It("returns correct details", func() {
-			Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
-				IRQDetails{
-					Num:        42,
-					Actions:    "foo,bar",
-					Affinities: CPUAffinities{{1, 3}, {42, 42}},
-				},
-				IRQDetails{
-					Num:        43,
-					Actions:    "baz",
-					Affinities: CPUAffinities{{0, 8}, {15, 15}},
-				}))
-		})
-
-		It("aborts iterator", func() {
-			counts := 0
-			for range allIRQDetails("./testdata/mixed") {
-				counts++
-				break
-			}
-			Expect(counts).To(Equal(1))
-		})
-
-		It("reads real IRQ details", func() {
-			counts := 0
-			irqnums := map[uint]struct{}{}
-			for irq := range AllCounters() {
-				irqnums[irq.Num] = struct{}{}
-			}
-			for irqdetail := range AllIRQDetails() {
-				counts++
-				Expect(irqnums).To(HaveKey(irqdetail.Num))
-				Expect(irqdetail.Actions).NotTo(BeEmpty())
-				Expect(irqdetail.Affinities).NotTo(BeEmpty())
-			}
-			Expect(counts).NotTo(BeZero())
-		})
-
+	It("reads real IRQ details", func() {
+		counts := 0
+		irqnums := map[uint]struct{}{}
+		for irq := range AllCounters() {
+			irqnums[irq.Num] = struct{}{}
+		}
+		for irqdetail := range AllIRQDetails() {
+			counts++
+			Expect(irqnums).To(HaveKey(irqdetail.Num))
+			Expect(irqdetail.Actions).NotTo(BeEmpty())
+			Expect(irqdetail.Affinities).NotTo(BeEmpty())
+		}
+		Expect(counts).NotTo(BeZero())
 	})
 
 })

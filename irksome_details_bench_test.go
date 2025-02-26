@@ -19,6 +19,8 @@ import (
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/thediveo/cpus"
 )
 
 /*
@@ -71,8 +73,8 @@ func AllIRQDetailsOsReadDir(root string) iter.Seq[IRQDetails] {
 			if err != nil || len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
-			afflist := cpuList(contents[:len(contents)-1])
-			if len(afflist) == 0 {
+			afflist, err := cpus.NewList(contents[:len(contents)-1])
+			if err != nil || len(afflist) == 0 {
 				continue
 			}
 			details.Affinities = afflist
