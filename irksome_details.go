@@ -16,6 +16,7 @@ package irks
 
 import (
 	"iter"
+	"path"
 
 	"github.com/thediveo/cpus"
 	"github.com/thediveo/faf"
@@ -39,12 +40,21 @@ type IRQDetails struct {
 // with 47 hardware IRQs, we only need at around 10% of memory on the heap, and
 // only 1/3 of allocations, compared to using stock stdlib functions.
 func AllIRQDetails() iter.Seq[IRQDetails] {
-	return allIRQDetails("")
+	return allIRQDetails("/")
+}
+
+// AllIRQDetailsRooted returns an iterator looping over the details of all
+// (non-architecture-specific) IRQs in the system, giving their details as to
+// actions and CPU affinities. The information is read from the passed-in
+// non-standard location, where the root argument specifies the stem path to
+// both “sys/kernel/irq/“ and “proc/irq/“ directories.
+func AllIRQDetailsRooted(root string) iter.Seq[IRQDetails] {
+	return allIRQDetails(root)
 }
 
 const (
-	syskernelirqPath = "/sys/kernel/irq/"
-	procirqPath      = "/proc/irq/"
+	syskernelirqPath = "/sys/kernel/irq"
+	procirqPath      = "/proc/irq"
 
 	actionsNode           = "/actions"
 	effectiveAffinityNode = "/effective_affinity_list"
@@ -58,7 +68,9 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 		// the root. But reusing the buffer to read the pseudo files boosts us...
 		var contents []byte
 		var details IRQDetails
-		for irqEntry := range faf.ReadDir(root + syskernelirqPath) {
+		sysIrqBase := path.Join(root, syskernelirqPath) + "/"
+		procIrqBase := path.Join(root, procirqPath) + "/"
+		for irqEntry := range faf.ReadDir(sysIrqBase) {
 			if !irqEntry.IsDir() {
 				continue
 			}
@@ -68,15 +80,13 @@ func allIRQDetails(root string) iter.Seq[IRQDetails] {
 			}
 			details.Num = uint(irqnum)
 
-			contents, ok := faf.ReadFile(
-				root+syskernelirqPath+string(irqEntry.Name)+actionsNode, contents)
+			contents, ok := faf.ReadFile(sysIrqBase+string(irqEntry.Name)+actionsNode, contents)
 			if !ok || len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}
 			details.Actions = string(contents[:len(contents)-1]) // escapes
 
-			contents, ok = faf.ReadFile(
-				root+procirqPath+string(irqEntry.Name)+effectiveAffinityNode, contents)
+			contents, ok = faf.ReadFile(procIrqBase+string(irqEntry.Name)+effectiveAffinityNode, contents)
 			if !ok || len(contents) < 1 || contents[len(contents)-1] != '\n' {
 				continue
 			}

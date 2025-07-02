@@ -25,12 +25,12 @@ import (
 var _ = Describe("irksome details", func() {
 
 	It("returns nothing then there are errors", func() {
-		Expect(allIRQDetails("./testdata/non-existing")).To(BeEmpty())
+		Expect(AllIRQDetailsRooted("./testdata/non-existing")).To(BeEmpty())
 
 	})
 
 	It("returns correct details", func() {
-		Expect(allIRQDetails("./testdata/mixed")).To(ConsistOf(
+		Expect(AllIRQDetailsRooted("./testdata/mixed")).To(ConsistOf(
 			IRQDetails{
 				Num:        42,
 				Actions:    "foo,bar",
@@ -45,7 +45,7 @@ var _ = Describe("irksome details", func() {
 
 	It("aborts iterator", func() {
 		counts := 0
-		for range allIRQDetails("./testdata/mixed") {
+		for range AllIRQDetailsRooted("./testdata/mixed") {
 			counts++
 			break
 		}
