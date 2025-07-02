@@ -13,8 +13,7 @@
 	"settings": {
 		"go.lintTool": "golangci-lint",
 		"go.testFlags": [
-			"-v",
-			"--ginkgo.no-color"
+			"-v"
 		],
 		"statsBar.memoUsage.format": "$(chip) ${used}/${total} ${unit}, ${percent}%",
 		"statsBar.location": "Right",
@@ -26,9 +25,8 @@
 				"name": "Debug/Test Package",
 				"type": "go",
 				"request": "launch",
-				"mode": "auto",
-				"program": "${fileDirname}",
-				
+				"mode": "test",
+				"program": "${fileDirname}"
 			}
 		]
 	}

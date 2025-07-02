@@ -19,9 +19,14 @@ import (
 	"io"
 	"iter"
 	"os"
+	"path"
 	"slices"
 
 	"github.com/thediveo/faf"
+)
+
+const (
+	procinterruptPath = /* some root relative */ "proc/interrupts"
 )
 
 // IRQ holds the per-CPU interrupt counters for this particular IRQ. Please note
@@ -44,12 +49,25 @@ type CPUList []uint
 // The produced IRQ information contains the per-CPU counters for a particular
 // IRQ, but only for CPUs that are currently online.
 func AllCounters() iter.Seq[IRQ] {
+	return AllCountersRooted("/")
+}
+
+// AllCountersRooted returns a single-use iterator that loops over the IRQ
+// information in “/proc/interrupts” format inside the passed-in non-standard
+// root location, producing all (non-architecture-specific) IRQs. This can be
+// useful for testing but also for accessing /proc/interrupts of the host from a
+// container via the procfs “root” elements when direct bind-mounting might be
+// unavailable.
+//
+// The produced IRQ information contains the per-CPU counters for a particular
+// IRQ, but only for CPUs that are currently online.
+func AllCountersRooted(root string) iter.Seq[IRQ] {
 	return func(yield func(IRQ) bool) {
-		f, err := os.Open("/proc/interrupts")
+		f, err := os.Open(path.Join(root, procinterruptPath))
 		if err != nil {
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		iterateAllCounters(f, nil, yield)
 	}
 }
@@ -62,12 +80,23 @@ func AllCounters() iter.Seq[IRQ] {
 // The produced IRQ information contains the per-CPU counters for a particular
 // IRQ, but only for CPUs that are currently online.
 func CountersFor(sortedirqnums []uint) iter.Seq[IRQ] {
+	return CountersForRooted("/", sortedirqnums)
+}
+
+// CountersFor returns a single-use iterator that loops over “/proc/interrupts”
+// inside the passed-in location, producing only the requested IRQs, skipping
+// non-existing IRQs. The list of requested IRQs must be sorted in ascending
+// order, but not in condescending order.
+//
+// The produced IRQ information contains the per-CPU counters for a particular
+// IRQ, but only for CPUs that are currently online.
+func CountersForRooted(root string, sortedirqnums []uint) iter.Seq[IRQ] {
 	return func(yield func(IRQ) bool) {
-		f, err := os.Open("/proc/interrupts")
+		f, err := os.Open(path.Join(root, procinterruptPath))
 		if err != nil {
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		iterateAllCounters(f, sortedirqnums, yield)
 	}
 }
@@ -158,13 +187,7 @@ func cpuListFromProcInterrupts(b []byte) CPUList {
 	}
 	cpuNums := make(CPUList, numCPUs)
 	idx := 0
-	for {
-		if bstr.SkipSpace() {
-			break
-		}
-		if !bstr.SkipText("CPU") {
-			break
-		}
+	for !bstr.SkipSpace() && bstr.SkipText("CPU") {
 		cpuNum, ok := bstr.Uint64()
 		if !ok {
 			break
