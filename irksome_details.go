@@ -53,8 +53,8 @@ func AllIRQDetailsRooted(root string) iter.Seq[IRQDetails] {
 }
 
 const (
-	syskernelirqPath = "/sys/kernel/irq"
-	procirqPath      = "/proc/irq"
+	syskernelirqPath = /* some root relative */ "sys/kernel/irq"
+	procirqPath      = /* some root relative */ "proc/irq"
 
 	actionsNode           = "/actions"
 	effectiveAffinityNode = "/effective_affinity_list"

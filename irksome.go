@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	procinterruptPath = "/proc/interrupts"
+	procinterruptPath = /* some root relative */ "proc/interrupts"
 )
 
 // IRQ holds the per-CPU interrupt counters for this particular IRQ. Please note
@@ -67,7 +67,7 @@ func AllCountersRooted(root string) iter.Seq[IRQ] {
 		if err != nil {
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		iterateAllCounters(f, nil, yield)
 	}
 }
@@ -96,7 +96,7 @@ func CountersForRooted(root string, sortedirqnums []uint) iter.Seq[IRQ] {
 		if err != nil {
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		iterateAllCounters(f, sortedirqnums, yield)
 	}
 }
@@ -187,13 +187,7 @@ func cpuListFromProcInterrupts(b []byte) CPUList {
 	}
 	cpuNums := make(CPUList, numCPUs)
 	idx := 0
-	for {
-		if bstr.SkipSpace() {
-			break
-		}
-		if !bstr.SkipText("CPU") {
-			break
-		}
+	for !bstr.SkipSpace() && bstr.SkipText("CPU") {
 		cpuNum, ok := bstr.Uint64()
 		if !ok {
 			break

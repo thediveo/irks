@@ -23,5 +23,5 @@ import (
 
 func TestIRQs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "irqs package")
+	RunSpecs(t, "irks package")
 }

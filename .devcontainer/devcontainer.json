@@ -16,10 +16,15 @@
             "num-programs": "1",
             "race": true,
             "verbose": true,
-            "html": true
+            "html": true,
+            "root": true
         },
         "ghcr.io/thediveo/devcontainer-features/pin-github-action:0": {}
     },
+    "runArgs": [
+        "--pid=host"
+    ],
+    "securityOpt": [ "apparmor=unconfined" ],
     "remoteEnv": {
         "GOPATH": "/home/vscode/go",
         "PATH": "/home/vscode/go/bin:/go/bin:/usr/local/go/bin:${localEnv:PATH}"

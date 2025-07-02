@@ -15,6 +15,8 @@
 package irks
 
 import (
+	"os"
+
 	"github.com/thediveo/cpus"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -53,12 +55,19 @@ var _ = Describe("irksome details", func() {
 	})
 
 	It("reads real IRQ details", func() {
+		root := "/"
+		if len(Successful(os.ReadFile("/proc/interrupts"))) == 0 {
+			if os.Getuid() != 0 {
+				Skip("needs root")
+			}
+			root = "/proc/1/root"
+		}
 		counts := 0
 		irqnums := map[uint]struct{}{}
-		for irq := range AllCounters() {
+		for irq := range AllCountersRooted(root) {
 			irqnums[irq.Num] = struct{}{}
 		}
-		for irqdetail := range AllIRQDetails() {
+		for irqdetail := range AllIRQDetailsRooted(root) {
 			counts++
 			Expect(irqnums).To(HaveKey(irqdetail.Num))
 			Expect(irqdetail.Actions).NotTo(BeEmpty())

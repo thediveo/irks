@@ -18,6 +18,7 @@ import (
 	"iter"
 	"math/rand/v2"
 	"os"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -126,12 +127,20 @@ var _ = Describe("irksome", func() {
 		})
 
 		It("reads something sensible from /proc/interrupts", func() {
-			procinterrupts := Successful(os.ReadFile("/proc/interrupts"))
+			root := "/"
+			if len(Successful(os.ReadFile("/proc/interrupts"))) == 0 {
+				if os.Getuid() != 0 {
+					Skip("needs root")
+				}
+				root = "/proc/1/root"
+			}
+
+			procinterrupts := Successful(os.ReadFile(path.Join(root, "proc/interrupts")))
 			numIRQs := len(regexp.MustCompile(`(?m)^\s*\d+:.+`).FindAllString(string(procinterrupts), -1))
 			Expect(numIRQs).NotTo(BeZero())
-			Expect(AllCounters()).To(HaveLen(numIRQs))
+			Expect(AllCountersRooted(root)).To(HaveLen(numIRQs))
 			numCPUs := 0
-			for irq := range AllCounters() {
+			for irq := range AllCountersRooted(root) {
 				if numCPUs == 0 {
 					numCPUs = len(irq.CPUs)
 				}
@@ -159,7 +168,15 @@ var _ = Describe("irksome", func() {
 		})
 
 		It("produces only wanted IRQ information", func() {
-			allirqs := safelyCollectIRQs(AllCounters())
+			root := "/"
+			if len(Successful(os.ReadFile("/proc/interrupts"))) == 0 {
+				if os.Getuid() != 0 {
+					Skip("needs root")
+				}
+				root = "/proc/1/root"
+			}
+			allirqs := safelyCollectIRQs(AllCountersRooted(root))
+			Expect(allirqs).NotTo(BeEmpty())
 			irqnums := []uint{}
 			for i := 0; i < 3; i++ {
 				var randomirq uint
@@ -172,7 +189,7 @@ var _ = Describe("irksome", func() {
 				irqnums = append(irqnums, randomirq)
 			}
 			slices.Sort(irqnums)
-			irqs := safelyCollectIRQs(CountersFor(irqnums))
+			irqs := safelyCollectIRQs(CountersForRooted(root, irqnums))
 			Expect(irqs).To(HaveLen(3))
 			for i, irqnum := range irqnums {
 				Expect(irqs[i].Num).To(Equal(irqnum))
