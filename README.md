@@ -8,28 +8,22 @@
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## DevContainer
+
+> [!CAUTION]
+>
+> Do **not** use VSCode's "~~Dev Containers: Clone Repository in Container
+> Volume~~" command, as it is utterly broken by design, ignoring
+> `.devcontainer/devcontainer.json`.
+
+1. `git clone https://github.com/thediveo/irks`
+2. in VSCode: Ctrl+Shift+P, "Dev Containers: Open Workspace in Container..."
+3. select `irks.code-workspace` and off you go...
+
 ## Go Version Support
 
 `notwork` supports versions of Go that are noted by the Go release policy, that
 is, major versions _N_ and _N_-1 (where _N_ is the current major version).
-
-## Make Targets
-
-- `make`: lists all targets.
-- `make coverage`: runs all tests with coverage and then **updates the coverage
-  badge in `README.md`**.
-- `make pkgsite`: installs [`x/pkgsite`](https://golang.org/x/pkgsite/cmd/pkgsite), as
-  well as the [`browser-sync`](https://www.npmjs.com/package/browser-sync) and
-  [`nodemon`](https://www.npmjs.com/package/nodemon) npm packages first, if not
-  already done so. Then runs the `pkgsite` and hot reloads it whenever the
-  documentation changes.
-- `make report`: installs
-  [`@gojp/goreportcard`](https://github.com/gojp/goreportcard) if not yet done
-  so and then runs it on the code base.
-- `make test`: runs **all** tests, always.
-- `make vuln`: installs
-  [`x/vuln/cmd/govulncheck`](https://golang.org/x/vuln/cmd/govulncheck) and then
-  runs it.
 
 ## Copyright and License
 
