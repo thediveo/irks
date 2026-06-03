@@ -83,10 +83,10 @@ func CountersFor(sortedirqnums []uint) iter.Seq[IRQ] {
 	return CountersForRooted("/", sortedirqnums)
 }
 
-// CountersFor returns a single-use iterator that loops over “/proc/interrupts”
-// inside the passed-in location, producing only the requested IRQs, skipping
-// non-existing IRQs. The list of requested IRQs must be sorted in ascending
-// order, but not in condescending order.
+// CountersForRooted returns a single-use iterator that loops over
+// “/proc/interrupts” inside the passed-in location, producing only the
+// requested IRQs, skipping non-existing IRQs. The list of requested IRQs must
+// be sorted in ascending order, but not in condescending order.
 //
 // The produced IRQ information contains the per-CPU counters for a particular
 // IRQ, but only for CPUs that are currently online.
@@ -114,6 +114,7 @@ func allCounters(r io.Reader, irqnums []uint) iter.Seq[IRQ] {
 	}
 }
 
+//nolint:scannererr // ignore any errors
 func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 	// Please note that sc.Bytes() returns a slice referencing the scanners
 	// internal memory that becomes invalid with advancing to the next
@@ -158,7 +159,7 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 		irq.Num = uint(irqno)
 
 		// Now consume the per-CPU counters
-		for idx := 0; idx < numCPUs; idx++ {
+		for idx := range numCPUs {
 			if bstr.SkipSpace() {
 				return
 			}
@@ -174,6 +175,7 @@ func iterateAllCounters(r io.Reader, irqnums []uint, yield func(IRQ) bool) {
 			return
 		}
 	}
+	_ = sc.Err() // f'it
 }
 
 // cpuListFromProcInterrupts returns the list of CPUs that are currently online,
