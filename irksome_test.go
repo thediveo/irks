@@ -33,7 +33,6 @@ import (
 func safelyCollectIRQs(it iter.Seq[IRQ]) []IRQ {
 	irqs := []IRQ{}
 	for irq := range it {
-		irq := irq
 		irq.Counters = slices.Clone(irq.Counters)
 		irqs = append(irqs, irq)
 	}
@@ -178,7 +177,7 @@ var _ = Describe("irksome", func() {
 			allirqs := safelyCollectIRQs(AllCountersRooted(root))
 			Expect(allirqs).NotTo(BeEmpty())
 			irqnums := []uint{}
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				var randomirq uint
 				for {
 					randomirq = allirqs[rand.UintN(uint(len(allirqs)))].Num

@@ -47,7 +47,7 @@ func AllIRQDetailsOsReadDir(root string) iter.Seq[IRQDetails] {
 			return
 		}
 		irqDirEntries, err := irqDir.ReadDir(-1)
-		irqDir.Close()
+		_ = irqDir.Close()
 		if err != nil {
 			return
 		}

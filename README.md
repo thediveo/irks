@@ -1,6 +1,9 @@
 # irks
 
-![Coverage](https://img.shields.io/badge/Coverage-94.4%25-brightgreen)
+[![PkgGoDev](https://img.shields.io/badge/-reference-blue?logo=go&logoColor=white&labelColor=505050)](https://pkg.go.dev/github.com/thediveo/irks)
+[![License](https://img.shields.io/github/license/thediveo/irks)](https://img.shields.io/github/license/thediveo/irks)
+![build and test](https://github.com/thediveo/irks/actions/workflows/buildandtest.yaml/badge.svg?branch=master)
+![Coverage](https://img.shields.io/badge/Coverage-94.5%25-brightgreen)
 
 `irks` is a Go module for retrieving IRQ counters, structure, and CPU affinity.
 
@@ -27,5 +30,5 @@ is, major versions _N_ and _N_-1 (where _N_ is the current major version).
 
 ## Copyright and License
 
-`irks` is Copyright 2024 Harald Albrecht, and licensed under the Apache License,
-Version 2.0.
+`irks` is Copyright 2024, 2026 Harald Albrecht, and licensed under the Apache
+License, Version 2.0.
